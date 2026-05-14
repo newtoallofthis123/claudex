@@ -38,13 +38,7 @@ anyhow        application-level errors
 thiserror     provider and parser error types, if needed
 dirs          home/config path discovery
 time          timestamps and file naming
-tempfile      filesystem tests
-insta         renderer snapshot tests
 ```
-
-No application framework is needed.
-
-Python is acceptable for a spike, but the implementation target should remain Rust unless distribution requirements change.
 
 ## Architecture
 
@@ -87,7 +81,7 @@ src/
     claude.rs
     codex.rs
   render.rs
-  handoff_store.rs
+  handoff.rs
   launch.rs
   config.rs
   settings.rs
