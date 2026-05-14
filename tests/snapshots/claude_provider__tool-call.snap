@@ -1,0 +1,18 @@
+---
+source: tests/claude_provider.rs
+expression: dump_conversation(&c)
+---
+source: claude
+session_id: fixture-tools
+cwd: /fixtures/project-alpha
+started_at: 2026-05-11 9:00:00.0 +00:00:00
+blocks:
+  [0] SystemEvent(idx=0, label=file-history-snapshot)
+  [1] HumanMessage(idx=1): "please list the files in src"
+  [2] AgentMessage(idx=2): "running ls now."
+  [3] ToolCall(idx=2, name=Bash): {
+  "command": "ls src",
+  "description": "list src"
+}
+  [4] ToolResult(idx=3): "main.rs\nlib.rs"
+  [5] AgentMessage(idx=4): "two files. want me to read main.rs?"

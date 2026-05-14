@@ -1,0 +1,5 @@
+{"type":"file-history-snapshot","messageId":"m-1","snapshot":{"trackedFileBackups":{}},"isSnapshotUpdate":false}
+{"type":"user","message":{"role":"user","content":"please list the files in src"},"uuid":"u-1","timestamp":"2026-05-11T09:00:00.000Z","cwd":"/fixtures/project-alpha","sessionId":"fixture-tools","gitBranch":"main"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"running ls now."},{"type":"tool_use","name":"Bash","input":{"command":"ls src","description":"list src"}}]},"uuid":"a-1","timestamp":"2026-05-11T09:00:01.000Z","cwd":"/fixtures/project-alpha","sessionId":"fixture-tools","gitBranch":"main"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":[{"type":"text","text":"main.rs\nlib.rs"}]}]},"uuid":"u-2","timestamp":"2026-05-11T09:00:02.000Z","cwd":"/fixtures/project-alpha","sessionId":"fixture-tools","gitBranch":"main"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"two files. want me to read main.rs?"}]},"uuid":"a-2","timestamp":"2026-05-11T09:00:03.000Z","cwd":"/fixtures/project-alpha","sessionId":"fixture-tools","gitBranch":"main"}

@@ -1,0 +1,12 @@
+---
+source: tests/claude_provider.rs
+expression: dump_conversation(&c)
+---
+source: claude
+session_id: fixture-unknown
+cwd: /fixtures/project-alpha
+started_at: 2026-05-12 8:00:00.0 +00:00:00
+blocks:
+  [0] HumanMessage(idx=0): "start"
+  [1] UnknownEvent(idx=1, raw_type=future-feature)
+  [2] AgentMessage(idx=2): "done"

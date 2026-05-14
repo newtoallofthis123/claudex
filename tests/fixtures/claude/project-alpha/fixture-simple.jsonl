@@ -1,0 +1,4 @@
+{"type":"user","message":{"role":"user","content":"hello, can you help me build something?"},"uuid":"u-1","timestamp":"2026-05-10T10:00:00.000Z","cwd":"/fixtures/project-alpha","sessionId":"fixture-simple","gitBranch":"main"}
+{"type":"assistant","message":{"role":"assistant","content":"sure, what are we building?"},"uuid":"a-1","timestamp":"2026-05-10T10:00:05.000Z","cwd":"/fixtures/project-alpha","sessionId":"fixture-simple","gitBranch":"main"}
+{"type":"user","message":{"role":"user","content":"a CLI tool in rust"},"uuid":"u-2","timestamp":"2026-05-10T10:00:10.000Z","cwd":"/fixtures/project-alpha","sessionId":"fixture-simple","gitBranch":"main"}
+{"type":"assistant","message":{"role":"assistant","content":"got it. let's start with the cargo manifest."},"uuid":"a-2","timestamp":"2026-05-10T10:00:15.000Z","cwd":"/fixtures/project-alpha","sessionId":"fixture-simple","gitBranch":"main"}

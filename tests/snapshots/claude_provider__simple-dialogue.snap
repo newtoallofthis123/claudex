@@ -1,0 +1,13 @@
+---
+source: tests/claude_provider.rs
+expression: dump_conversation(&c)
+---
+source: claude
+session_id: fixture-simple
+cwd: /fixtures/project-alpha
+started_at: 2026-05-10 10:00:00.0 +00:00:00
+blocks:
+  [0] HumanMessage(idx=0): "hello, can you help me build something?"
+  [1] AgentMessage(idx=1): "sure, what are we building?"
+  [2] HumanMessage(idx=2): "a CLI tool in rust"
+  [3] AgentMessage(idx=3): "got it. let's start with the cargo manifest."

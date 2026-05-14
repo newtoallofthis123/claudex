@@ -1,0 +1,11 @@
+---
+source: tests/claude_provider.rs
+expression: dump_conversation(&c)
+---
+source: claude
+session_id: fixture-multibyte
+cwd: /fixtures/project-alpha
+started_at: 2026-05-09 8:00:00.0 +00:00:00
+blocks:
+  [0] HumanMessage(idx=0): "こんにちは — emoji 🚀 test"
+  [1] AgentMessage(idx=1): "返事 ✅"

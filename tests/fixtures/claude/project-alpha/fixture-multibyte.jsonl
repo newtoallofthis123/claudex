@@ -1,0 +1,2 @@
+{"type":"user","message":{"role":"user","content":"こんにちは — emoji 🚀 test"},"uuid":"u-1","timestamp":"2026-05-09T08:00:00.000Z","cwd":"/fixtures/project-alpha","sessionId":"fixture-multibyte","gitBranch":"main"}
+{"type":"assistant","message":{"role":"assistant","content":"返事 ✅"},"uuid":"a-1","timestamp":"2026-05-09T08:00:01.000Z","cwd":"/fixtures/project-alpha","sessionId":"fixture-multibyte","gitBranch":"main"}
