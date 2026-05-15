@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use assert_cmd::Command;
-use tempfile::{TempDir, tempdir};
+use tempfile::{tempdir, TempDir};
 
 fn fixtures_claude() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/claude")
@@ -40,7 +40,10 @@ fn claudex(home: &Path) -> Command {
 #[test]
 fn list_claude_lists_fixtures() {
     let (tmp, _) = fixture_env();
-    let out = claudex(tmp.path()).args(["list", "claude"]).assert().success();
+    let out = claudex(tmp.path())
+        .args(["list", "claude"])
+        .assert()
+        .success();
     let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
 
     // Expect each fixture id to appear.
@@ -71,7 +74,11 @@ fn list_last_prints_one_row() {
     let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
     let lines: Vec<&str> = stdout.lines().collect();
     assert_eq!(lines.len(), 1, "expected one row, got:\n{stdout}");
-    assert!(lines[0].starts_with("fixture-invalid\t"), "got: {}", lines[0]);
+    assert!(
+        lines[0].starts_with("fixture-invalid\t"),
+        "got: {}",
+        lines[0]
+    );
 }
 
 #[test]
@@ -86,7 +93,11 @@ fn list_verbose_appends_path() {
     // tab-separated, fifth column should be the transcript path.
     let cols: Vec<&str> = line.split('\t').collect();
     assert_eq!(cols.len(), 5, "expected 5 columns, got: {line}");
-    assert!(cols[4].ends_with("fixture-invalid.jsonl"), "got: {}", cols[4]);
+    assert!(
+        cols[4].ends_with("fixture-invalid.jsonl"),
+        "got: {}",
+        cols[4]
+    );
 }
 
 #[test]
@@ -113,7 +124,10 @@ fn inspect_full_includes_body() {
     let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
     assert!(stdout.contains("source: claude"));
     // A known line from the rendered body.
-    assert!(stdout.contains("hello, can you help me build something?"), "missing user text:\n{stdout}");
+    assert!(
+        stdout.contains("hello, can you help me build something?"),
+        "missing user text:\n{stdout}"
+    );
 }
 
 #[test]
@@ -127,11 +141,17 @@ fn handoff_no_launch_writes_file() {
     let line = stdout.lines().next().unwrap();
     assert!(line.starts_with("wrote: "), "got: {line}");
     let path = PathBuf::from(line.trim_start_matches("wrote: "));
-    assert!(path.starts_with(&handoff_dir), "{path:?} not under {handoff_dir:?}");
+    assert!(
+        path.starts_with(&handoff_dir),
+        "{path:?} not under {handoff_dir:?}"
+    );
     let name = path.file_name().unwrap().to_str().unwrap();
     assert!(name.starts_with("claude-to-codex-"), "name: {name}");
     let body = std::fs::read_to_string(&path).unwrap();
-    assert!(body.starts_with("source: claude\ntarget: codex\n"), "body:\n{body}");
+    assert!(
+        body.starts_with("source: claude\ntarget: codex\n"),
+        "body:\n{body}"
+    );
 }
 
 #[test]

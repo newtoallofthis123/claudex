@@ -1,7 +1,7 @@
 # claudex v1 — Rust CLI for Claude↔Codex handoffs
 
 **Date:** 2026-05-14
-**Status:** draft
+**Status:** enacting
 **Worklog:** worklog.md
 
 ## Context

@@ -6,9 +6,9 @@ use claudex::model::{
     Agent, Block, Conversation, SystemEventBlock, TextBlock, ToolCallBlock, ToolResultBlock,
     UnknownEventBlock,
 };
-use claudex::render::{TOOL_OUTPUT_LIMIT, render};
-use time::OffsetDateTime;
+use claudex::render::{render, TOOL_OUTPUT_LIMIT};
 use time::macros::datetime;
+use time::OffsetDateTime;
 
 fn fixed_created_at() -> OffsetDateTime {
     datetime!(2026-05-14 22:40:00 +05:30)
@@ -87,10 +87,7 @@ fn tool_call_truncated_output() {
     let big: String = line.repeat(repeats);
     assert!(big.chars().count() > TOOL_OUTPUT_LIMIT);
 
-    let conv = base_conversation(vec![
-        tool_call("Bash", "rg login src"),
-        tool_result(&big),
-    ]);
+    let conv = base_conversation(vec![tool_call("Bash", "rg login src"), tool_result(&big)]);
     let rendered = render(&conv, Agent::Codex, fixed_created_at());
     let expected_marker = format!(
         "[truncated: showing first {} chars of {}]",
@@ -142,10 +139,7 @@ fn unknown_event_preserved() {
 
 #[test]
 fn missing_cwd() {
-    let mut conv = base_conversation(vec![
-        human("Quick question."),
-        agent("Sure."),
-    ]);
+    let mut conv = base_conversation(vec![human("Quick question."), agent("Sure.")]);
     conv.cwd = None;
     let rendered = render(&conv, Agent::Codex, fixed_created_at());
     assert!(

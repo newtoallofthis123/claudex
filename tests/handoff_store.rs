@@ -3,8 +3,8 @@ use std::fs;
 use claudex::handoff_store::HandoffStore;
 use claudex::model::Agent;
 use tempfile::tempdir;
-use time::OffsetDateTime;
 use time::macros::datetime;
+use time::OffsetDateTime;
 
 fn fixed_created_at() -> OffsetDateTime {
     datetime!(2026-05-14 22:40:00 +05:30)
@@ -23,7 +23,11 @@ fn writes_inside_target_dir() {
             "hello",
         )
         .unwrap();
-    assert!(path.starts_with(tmp.path()), "{path:?} not under {:?}", tmp.path());
+    assert!(
+        path.starts_with(tmp.path()),
+        "{path:?} not under {:?}",
+        tmp.path()
+    );
     let body = fs::read_to_string(&path).unwrap();
     assert_eq!(body, "hello");
 }

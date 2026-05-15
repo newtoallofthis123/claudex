@@ -2,9 +2,9 @@ use std::fs::OpenOptions;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use time::OffsetDateTime;
 use time::format_description::FormatItem;
 use time::macros::format_description;
+use time::OffsetDateTime;
 
 use crate::model::Agent;
 
@@ -57,11 +57,7 @@ impl HandoffStore {
             let name = Self::filename(source, target, session_id, created_at, dedup);
             let path = self.dir.join(&name);
             last_path = path.clone();
-            match OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(&path)
-            {
+            match OpenOptions::new().create_new(true).write(true).open(&path) {
                 Ok(mut f) => {
                     f.write_all(body.as_bytes())
                         .map_err(|e| HandoffStoreError::Write(path.clone(), e))?;

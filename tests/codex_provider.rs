@@ -20,28 +20,55 @@ fn dump_conversation(c: &Conversation) -> String {
     writeln!(
         s,
         "cwd: {}",
-        c.cwd.as_ref().map(|p| p.display().to_string()).unwrap_or_default()
+        c.cwd
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default()
     )
     .unwrap();
     writeln!(
         s,
         "started_at: {}",
         c.started_at
-            .map(|t| t.format(&time::format_description::well_known::Rfc3339).unwrap_or_default())
+            .map(|t| t
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default())
             .unwrap_or_default()
     )
     .unwrap();
     writeln!(s, "blocks:").unwrap();
     for b in &c.blocks {
         match b {
-            Block::HumanMessage(t) => writeln!(s, "  [{}] HumanMessage: {:?}", t.source_event_index, t.text).unwrap(),
-            Block::AgentMessage(t) => writeln!(s, "  [{}] AgentMessage: {:?}", t.source_event_index, t.text).unwrap(),
-            Block::ToolCall(t) => {
-                writeln!(s, "  [{}] ToolCall: name={:?} input={:?}", t.source_event_index, t.name, t.input).unwrap()
+            Block::HumanMessage(t) => {
+                writeln!(s, "  [{}] HumanMessage: {:?}", t.source_event_index, t.text).unwrap()
             }
-            Block::ToolResult(t) => writeln!(s, "  [{}] ToolResult: output={:?}", t.source_event_index, t.output).unwrap(),
-            Block::SystemEvent(e) => writeln!(s, "  [{}] SystemEvent: label={} detail={}", e.source_event_index, e.label, e.detail).unwrap(),
-            Block::UnknownEvent(e) => writeln!(s, "  [{}] UnknownEvent: raw_type={} raw_excerpt={}", e.source_event_index, e.raw_type, e.raw_excerpt).unwrap(),
+            Block::AgentMessage(t) => {
+                writeln!(s, "  [{}] AgentMessage: {:?}", t.source_event_index, t.text).unwrap()
+            }
+            Block::ToolCall(t) => writeln!(
+                s,
+                "  [{}] ToolCall: name={:?} input={:?}",
+                t.source_event_index, t.name, t.input
+            )
+            .unwrap(),
+            Block::ToolResult(t) => writeln!(
+                s,
+                "  [{}] ToolResult: output={:?}",
+                t.source_event_index, t.output
+            )
+            .unwrap(),
+            Block::SystemEvent(e) => writeln!(
+                s,
+                "  [{}] SystemEvent: label={} detail={}",
+                e.source_event_index, e.label, e.detail
+            )
+            .unwrap(),
+            Block::UnknownEvent(e) => writeln!(
+                s,
+                "  [{}] UnknownEvent: raw_type={} raw_excerpt={}",
+                e.source_event_index, e.raw_type, e.raw_excerpt
+            )
+            .unwrap(),
         }
     }
     s
@@ -165,5 +192,9 @@ fn classify_message_with_unknown_role_is_system_event() {
         .blocks
         .iter()
         .any(|b| matches!(b, Block::SystemEvent(e) if e.label == "message"));
-    assert!(has_sys, "expected SystemEvent for message with role=system, got {:?}", c.blocks);
+    assert!(
+        has_sys,
+        "expected SystemEvent for message with role=system, got {:?}",
+        c.blocks
+    );
 }

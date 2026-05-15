@@ -36,10 +36,16 @@ fn dump_conversation(c: &Conversation) -> String {
     for (i, b) in c.blocks.iter().enumerate() {
         match b {
             Block::HumanMessage(t) => {
-                out.push_str(&format!("  [{i}] HumanMessage(idx={}): {:?}\n", t.source_event_index, t.text));
+                out.push_str(&format!(
+                    "  [{i}] HumanMessage(idx={}): {:?}\n",
+                    t.source_event_index, t.text
+                ));
             }
             Block::AgentMessage(t) => {
-                out.push_str(&format!("  [{i}] AgentMessage(idx={}): {:?}\n", t.source_event_index, t.text));
+                out.push_str(&format!(
+                    "  [{i}] AgentMessage(idx={}): {:?}\n",
+                    t.source_event_index, t.text
+                ));
             }
             Block::ToolCall(tc) => {
                 out.push_str(&format!(
@@ -94,7 +100,10 @@ fn list_sessions_returns_all_fixtures_newest_first() {
     let s = &sessions[3];
     assert_eq!(s.id, "fixture-simple");
     assert_eq!(s.agent, Agent::Claude);
-    assert_eq!(s.cwd.as_deref(), Some(std::path::Path::new("/fixtures/project-alpha")));
+    assert_eq!(
+        s.cwd.as_deref(),
+        Some(std::path::Path::new("/fixtures/project-alpha"))
+    );
     assert_eq!(
         s.title.as_deref(),
         Some("hello, can you help me build something?")
@@ -135,7 +144,10 @@ fn resolve_session_ambiguous_across_roots() {
         ProviderError::AmbiguousSession { id, matches } => {
             assert_eq!(id, "fixture-simple");
             assert_eq!(matches.len(), 2);
-            assert!(matches.windows(2).all(|w| w[0] <= w[1]), "matches must be sorted");
+            assert!(
+                matches.windows(2).all(|w| w[0] <= w[1]),
+                "matches must be sorted"
+            );
         }
         other => panic!("expected AmbiguousSession, got {other:?}"),
     }

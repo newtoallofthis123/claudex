@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use claudex::launch::{LaunchError, Launcher, ProcessLauncher, catch_up_prompt};
+use claudex::launch::{catch_up_prompt, LaunchError, Launcher, ProcessLauncher};
 use claudex::model::Agent;
 use tempfile::tempdir;
 

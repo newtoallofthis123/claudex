@@ -134,10 +134,7 @@ impl Provider for CodexProvider {
         }
     }
 
-    fn parse_transcript(
-        &self,
-        session: &ResolvedSession,
-    ) -> Result<Conversation, ProviderError> {
+    fn parse_transcript(&self, session: &ResolvedSession) -> Result<Conversation, ProviderError> {
         let path = &session.path;
         let file = File::open(path).map_err(|e| ProviderError::TranscriptUnreadable {
             path: path.clone(),
@@ -209,11 +206,13 @@ fn classify(
     let payload_v = payload.cloned().unwrap_or(Value::Null);
 
     match (outer, payload_type) {
-        (Some(label @ ("session_meta" | "turn_context")), _) => Block::SystemEvent(SystemEventBlock {
-            label: label.to_string(),
-            detail: compact(&payload_v),
-            source_event_index: idx,
-        }),
+        (Some(label @ ("session_meta" | "turn_context")), _) => {
+            Block::SystemEvent(SystemEventBlock {
+                label: label.to_string(),
+                detail: compact(&payload_v),
+                source_event_index: idx,
+            })
+        }
         (_, Some("user_message")) => Block::HumanMessage(TextBlock {
             text: extract_message_text(&payload_v),
             source_event_index: idx,
@@ -286,10 +285,7 @@ fn classify(
             source_event_index: idx,
         }),
         _ => {
-            let raw_type = payload_type
-                .or(outer)
-                .unwrap_or("<missing>")
-                .to_string();
+            let raw_type = payload_type.or(outer).unwrap_or("<missing>").to_string();
             Block::UnknownEvent(UnknownEventBlock {
                 raw_type,
                 raw_excerpt: compact(full),
@@ -463,24 +459,22 @@ fn summarize_rollout(path: &Path) -> std::io::Result<Option<SessionSummary>> {
             continue;
         };
 
-        if !saw_meta {
-            if parsed.ty.as_deref() == Some("session_meta") {
-                // ScanPayload doesn't carry id/cwd; reparse as Value to pick them up.
-                if let Ok(meta_val) = serde_json::from_str::<serde_json::Value>(&line) {
-                    if let Some(p) = meta_val.get("payload") {
-                        if let Some(v) = p.get("id").and_then(|v| v.as_str()) {
-                            id = Some(v.to_string());
-                        }
-                        if let Some(v) = p.get("cwd").and_then(|v| v.as_str()) {
-                            cwd = Some(PathBuf::from(v));
-                        }
-                        if let Some(v) = p.get("timestamp").and_then(|v| v.as_str()) {
-                            started_at = OffsetDateTime::parse(v, &Rfc3339).ok();
-                        }
+        if !saw_meta && parsed.ty.as_deref() == Some("session_meta") {
+            // ScanPayload doesn't carry id/cwd; reparse as Value to pick them up.
+            if let Ok(meta_val) = serde_json::from_str::<serde_json::Value>(&line) {
+                if let Some(p) = meta_val.get("payload") {
+                    if let Some(v) = p.get("id").and_then(|v| v.as_str()) {
+                        id = Some(v.to_string());
+                    }
+                    if let Some(v) = p.get("cwd").and_then(|v| v.as_str()) {
+                        cwd = Some(PathBuf::from(v));
+                    }
+                    if let Some(v) = p.get("timestamp").and_then(|v| v.as_str()) {
+                        started_at = OffsetDateTime::parse(v, &Rfc3339).ok();
                     }
                 }
-                saw_meta = true;
             }
+            saw_meta = true;
         }
 
         if let Some(ts) = parsed.timestamp.as_deref() {
@@ -503,7 +497,11 @@ fn summarize_rollout(path: &Path) -> std::io::Result<Option<SessionSummary>> {
                         }),
                     Some("message") if p.role.as_deref() == Some("user") => {
                         let t = flatten_content_parts(p.content.as_ref());
-                        if t.is_empty() { None } else { Some(t) }
+                        if t.is_empty() {
+                            None
+                        } else {
+                            Some(t)
+                        }
                     }
                     _ => None,
                 };

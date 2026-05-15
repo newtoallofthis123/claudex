@@ -17,7 +17,7 @@ pub fn config_path() -> PathBuf {
 /// Load the config at `path`, returning `Config::default()` when the file is
 /// missing.
 pub fn load(path: &Path) -> anyhow::Result<Config> {
-    config::load_from(path).map_err(Into::into)
+    config::load_from(path)
 }
 
 /// Convenience: load the config from `config_path()`.
@@ -59,7 +59,7 @@ pub fn get_value(cfg: &Config, key: &str) -> anyhow::Result<String> {
             .handoff_dir
             .as_ref()
             .map(|p| toml::Value::String(p.display().to_string()).to_string())
-            .unwrap_or_else(|| "".to_string())),
+            .unwrap_or_default()),
         "roots.claude" => Ok(toml_array(&cfg.roots.claude)),
         "roots.codex" => Ok(toml_array(&cfg.roots.codex)),
         other => Err(anyhow::anyhow!(
@@ -122,9 +122,9 @@ fn toml_array(paths: &[PathBuf]) -> String {
 }
 
 fn parse_toml_path_array(s: &str) -> anyhow::Result<Vec<PathBuf>> {
-    let value: toml::Value = s.parse().map_err(|e| {
-        anyhow::anyhow!("could not parse `{s}` as a TOML array of strings: {e}")
-    })?;
+    let value: toml::Value = s
+        .parse()
+        .map_err(|e| anyhow::anyhow!("could not parse `{s}` as a TOML array of strings: {e}"))?;
     let arr = value
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("expected a TOML array, got `{s}`"))?;

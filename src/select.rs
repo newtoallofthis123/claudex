@@ -44,7 +44,9 @@ impl Selector for FzfSelector {
             // exit code 130 = user cancelled; treat as no selection.
             return Ok(None);
         }
-        let chosen = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
+        let chosen = String::from_utf8_lossy(&output.stdout)
+            .trim_end()
+            .to_string();
         if chosen.is_empty() {
             return Ok(None);
         }

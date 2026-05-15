@@ -1,5 +1,4 @@
 use std::io::Write as _;
-use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use time::OffsetDateTime;
@@ -65,11 +64,24 @@ pub enum SettingsAction {
     Path,
     Show,
     Edit,
-    Get { key: String },
-    Set { key: String, value: String },
-    AddRoot { agent: String, path: std::path::PathBuf },
-    RemoveRoot { agent: String, path: std::path::PathBuf },
-    ResetRoot { agent: String },
+    Get {
+        key: String,
+    },
+    Set {
+        key: String,
+        value: String,
+    },
+    AddRoot {
+        agent: String,
+        path: std::path::PathBuf,
+    },
+    RemoveRoot {
+        agent: String,
+        path: std::path::PathBuf,
+    },
+    ResetRoot {
+        agent: String,
+    },
 }
 
 const INSPECT_PREVIEW_LINES: usize = 80;
@@ -117,19 +129,15 @@ fn run_to_exit_code() -> anyhow::Result<i32> {
 }
 
 fn parse_agent(s: &str) -> anyhow::Result<Agent> {
-    Agent::parse(s).ok_or_else(|| {
-        anyhow::anyhow!("unknown agent `{s}` (expected `claude` or `codex`)")
-    })
+    Agent::parse(s)
+        .ok_or_else(|| anyhow::anyhow!("unknown agent `{s}` (expected `claude` or `codex`)"))
 }
 
-fn cmd_list(
-    agent_str: &str,
-    last: bool,
-    interactive: bool,
-    verbose: bool,
-) -> anyhow::Result<()> {
+fn cmd_list(agent_str: &str, last: bool, interactive: bool, verbose: bool) -> anyhow::Result<()> {
     if last && interactive {
-        return Err(anyhow::anyhow!("`--last` and `--interactive` are mutually exclusive"));
+        return Err(anyhow::anyhow!(
+            "`--last` and `--interactive` are mutually exclusive"
+        ));
     }
     let agent = parse_agent(agent_str)?;
     let cfg = settings::load_default()?;
@@ -179,7 +187,12 @@ fn cmd_inspect(
     full: bool,
 ) -> anyhow::Result<()> {
     let cfg = settings::load_default()?;
-    let (agent, summary) = resolve_selection(session.as_deref(), last.as_deref(), interactive.as_deref(), &cfg)?;
+    let (agent, summary) = resolve_selection(
+        session.as_deref(),
+        last.as_deref(),
+        interactive.as_deref(),
+        &cfg,
+    )?;
     let provider = providers::for_agent(agent, &cfg);
     let resolved = provider.resolve_session(&summary.id)?;
     let conv = provider.parse_transcript(&resolved)?;
@@ -259,10 +272,14 @@ fn resolve_selection(
     interactive_agent: Option<&str>,
     cfg: &Config,
 ) -> anyhow::Result<(Agent, SessionSummary)> {
-    let modes = [explicit.is_some(), last_agent.is_some(), interactive_agent.is_some()]
-        .iter()
-        .filter(|b| **b)
-        .count();
+    let modes = [
+        explicit.is_some(),
+        last_agent.is_some(),
+        interactive_agent.is_some(),
+    ]
+    .iter()
+    .filter(|b| **b)
+    .count();
     if modes != 1 {
         return Err(anyhow::anyhow!(
             "specify exactly one of <session-ref>, --last <agent>, or --interactive <agent>"
@@ -301,8 +318,12 @@ fn cmd_handoff(
 ) -> anyhow::Result<i32> {
     let target = parse_agent(target_str)?;
     let cfg = settings::load_default()?;
-    let (source_agent, summary) =
-        resolve_selection(source.as_deref(), last.as_deref(), interactive.as_deref(), &cfg)?;
+    let (source_agent, summary) = resolve_selection(
+        source.as_deref(),
+        last.as_deref(),
+        interactive.as_deref(),
+        &cfg,
+    )?;
 
     if source_agent == target {
         return Err(anyhow::anyhow!(
@@ -392,7 +413,7 @@ fn cmd_settings(action: SettingsAction) -> anyhow::Result<()> {
         SettingsAction::AddRoot { agent, path: root } => {
             let agent = parse_agent(&agent)?;
             let mut cfg = settings::load(&path)?;
-            settings::add_root(&mut cfg, agent, PathBuf::from(root));
+            settings::add_root(&mut cfg, agent, root);
             settings::write(&path, &cfg)?;
             println!("ok");
             Ok(())

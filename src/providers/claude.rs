@@ -247,23 +247,22 @@ fn push_message_blocks(
 
     // Walk array; coalesce consecutive `text` items into a single text block.
     let mut text_buf: Vec<String> = Vec::new();
-    let flush_text =
-        |buf: &mut Vec<String>, blocks: &mut Vec<Block>| {
-            if buf.is_empty() {
-                return;
-            }
-            let joined = buf.join("\n");
-            buf.clear();
-            let tb = TextBlock {
-                text: joined,
-                source_event_index: idx,
-            };
-            blocks.push(if role_human {
-                Block::HumanMessage(tb)
-            } else {
-                Block::AgentMessage(tb)
-            });
+    let flush_text = |buf: &mut Vec<String>, blocks: &mut Vec<Block>| {
+        if buf.is_empty() {
+            return;
+        }
+        let joined = buf.join("\n");
+        buf.clear();
+        let tb = TextBlock {
+            text: joined,
+            source_event_index: idx,
         };
+        blocks.push(if role_human {
+            Block::HumanMessage(tb)
+        } else {
+            Block::AgentMessage(tb)
+        });
+    };
 
     for item in arr {
         let ty = item.get("type").and_then(|t| t.as_str()).unwrap_or("");
@@ -280,7 +279,10 @@ fn push_message_blocks(
                     .and_then(|n| n.as_str())
                     .unwrap_or("")
                     .to_string();
-                let input_value = item.get("input").cloned().unwrap_or(serde_json::Value::Null);
+                let input_value = item
+                    .get("input")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
                 let input = serde_json::to_string_pretty(&input_value)
                     .unwrap_or_else(|_| compact_json(&input_value));
                 blocks.push(Block::ToolCall(ToolCallBlock {
@@ -291,7 +293,10 @@ fn push_message_blocks(
             }
             "tool_result" => {
                 flush_text(&mut text_buf, blocks);
-                let inner = item.get("content").cloned().unwrap_or(serde_json::Value::Null);
+                let inner = item
+                    .get("content")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
                 let output = flatten_tool_result_content(&inner);
                 blocks.push(Block::ToolResult(ToolResultBlock {
                     output,
@@ -354,7 +359,9 @@ impl Provider for ClaudeProvider {
             return Err(ProviderError::RootNotFound(missing));
         }
         if !any_existed {
-            return Err(ProviderError::RootNotFound(roots.into_iter().next().unwrap()));
+            return Err(ProviderError::RootNotFound(
+                roots.into_iter().next().unwrap(),
+            ));
         }
 
         // Sort by started_at descending; None sorts last.
@@ -397,10 +404,7 @@ impl Provider for ClaudeProvider {
         }
     }
 
-    fn parse_transcript(
-        &self,
-        session: &ResolvedSession,
-    ) -> Result<Conversation, ProviderError> {
+    fn parse_transcript(&self, session: &ResolvedSession) -> Result<Conversation, ProviderError> {
         let path = &session.path;
         let file = File::open(path).map_err(|e| ProviderError::TranscriptUnreadable {
             path: path.clone(),
@@ -446,8 +450,10 @@ impl Provider for ClaudeProvider {
             match ty {
                 Some("user") => push_message_blocks(&mut blocks, idx, &value, true),
                 Some("assistant") => push_message_blocks(&mut blocks, idx, &value, false),
-                Some(t @ ("permission-mode" | "file-history-snapshot" | "last-prompt"
-                | "attachment")) => {
+                Some(
+                    t
+                    @ ("permission-mode" | "file-history-snapshot" | "last-prompt" | "attachment"),
+                ) => {
                     blocks.push(Block::SystemEvent(SystemEventBlock {
                         label: t.to_string(),
                         detail: compact_json(&value),
