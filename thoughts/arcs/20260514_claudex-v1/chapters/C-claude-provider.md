@@ -36,7 +36,7 @@ Each line has a top-level `type`. Conversational lines (`user`, `assistant`) car
   },
   "uuid": "...",
   "timestamp": "2026-05-14T17:39:32.755Z",
-  "cwd": "/Users/noob/Projects/claudex",
+  "cwd": "/Users/noob/Projects/baton",
   "sessionId": "...",
   "gitBranch": "main"
 }

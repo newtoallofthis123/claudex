@@ -1,4 +1,4 @@
-# claudex v1 — Rust CLI for Claude↔Codex handoffs
+# baton v1 — Rust CLI for Claude↔Codex handoffs
 
 **Date:** 2026-05-14
 **Status:** enacting

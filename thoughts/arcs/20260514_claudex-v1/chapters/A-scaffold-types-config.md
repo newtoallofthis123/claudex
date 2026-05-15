@@ -31,7 +31,7 @@ Initialise the Rust crate, lay down the module tree from the PRD, and define the
 
 - `cargo build` succeeds.
 - `cargo test` runs unit tests for `session_ref` and `config` and they pass.
-- `claudex --help` prints subcommand list (`list`, `inspect`, `handoff`, `settings`); subcommand handlers may be `todo!()`.
+- `baton --help` prints subcommand list (`list`, `inspect`, `handoff`, `settings`); subcommand handlers may be `todo!()`.
 - `SessionRef::parse` accepts `claude:<id>` and `codex:<id>`, rejects everything else with a specific error variant.
 - `config::load` resolves effective Claude/Codex roots and `handoff_dir` from (1) config file, (2) `CLAUDE_CONFIG_DIR` / `CODEX_HOME` env vars, (3) home-directory fallback.
 
@@ -40,12 +40,12 @@ Initialise the Rust crate, lay down the module tree from the PRD, and define the
 ### A.1 — Cargo project + dependencies
 
 - **Goal:** Bootable Rust crate with the dependency set the PRD recommends.
-- **Files & changes:** Run `cargo init --name claudex --bin`. Create `src/lib.rs`. In `Cargo.toml`, add deps. Add a `.gitignore` excluding `/target`.
+- **Files & changes:** Run `cargo init --name baton --bin`. Create `src/lib.rs`. In `Cargo.toml`, add deps. Add a `.gitignore` excluding `/target`.
 - **Code:**
 
   ```toml
   [package]
-  name = "claudex"
+  name = "baton"
   version = "0.1.0"
   edition = "2021"
 
@@ -64,7 +64,7 @@ Initialise the Rust crate, lay down the module tree from the PRD, and define the
   tempfile = "3"
 
   [[bin]]
-  name = "claudex"
+  name = "baton"
   path = "src/main.rs"
 
   [lib]
@@ -75,7 +75,7 @@ Initialise the Rust crate, lay down the module tree from the PRD, and define the
 
   ```rust
   fn main() -> anyhow::Result<()> {
-      claudex::cli::run()
+      baton::cli::run()
   }
   ```
 
@@ -272,7 +272,7 @@ Initialise the Rust crate, lay down the module tree from the PRD, and define the
   }
 
   pub fn default_path() -> PathBuf {
-      dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("claudex/config.toml")
+      dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("baton/config.toml")
   }
 
   pub fn load() -> anyhow::Result<Config> { load_from(&default_path()) }
@@ -321,7 +321,7 @@ Initialise the Rust crate, lay down the module tree from the PRD, and define the
   use clap::{Parser, Subcommand};
 
   #[derive(Parser)]
-  #[command(name = "claudex", version)]
+  #[command(name = "baton", version)]
   pub struct Cli { #[command(subcommand)] pub command: Command }
 
   #[derive(Subcommand)]

@@ -2,10 +2,10 @@
 type: enact-worklog
 created: 2026-05-14
 status: enacting
-arc: thoughts/arcs/20260514_claudex-v1/
+arc: thoughts/arcs/20260514_baton-v1/
 ---
 
-# claudex v1 — Rust CLI for Claude↔Codex handoffs
+# baton v1 — Rust CLI for Claude↔Codex handoffs
 
 ## Problem solved
 

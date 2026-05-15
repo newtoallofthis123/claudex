@@ -20,12 +20,12 @@ Wire everything together. Implement command bodies for `list`, `inspect`, `hando
 
 ## Success criteria
 
-- `claudex list claude` and `claudex list codex` print one row per session: `id  started_at  cwd  title` (tab-separated). `--verbose` adds `path`. Order: newest first. `--last` prints only the top row.
-- `claudex list <agent> --interactive` pipes rows to `fzf` and prints the selected `<agent>:<id>` reference. With no `fzf` on PATH, fails with a clear error.
-- `claudex inspect <ref>` prints metadata header (source, session_id, transcript path, cwd, message/tool block counts) and a preview (default: first 80 lines of the rendered handoff). `--full` prints the entire rendered handoff. `--last <agent>` and `--interactive <agent>` re-use the selection layer.
-- `claudex handoff <source-ref> <target-agent>` parses the ref, resolves it, parses the transcript, renders the handoff, writes it under the configured handoff dir, prints the final path, and then launches the target agent. With `--no-launch`, skip the launch step and exit 0. Refusing to handoff when source agent == target agent (clear error).
+- `baton list claude` and `baton list codex` print one row per session: `id  started_at  cwd  title` (tab-separated). `--verbose` adds `path`. Order: newest first. `--last` prints only the top row.
+- `baton list <agent> --interactive` pipes rows to `fzf` and prints the selected `<agent>:<id>` reference. With no `fzf` on PATH, fails with a clear error.
+- `baton inspect <ref>` prints metadata header (source, session_id, transcript path, cwd, message/tool block counts) and a preview (default: first 80 lines of the rendered handoff). `--full` prints the entire rendered handoff. `--last <agent>` and `--interactive <agent>` re-use the selection layer.
+- `baton handoff <source-ref> <target-agent>` parses the ref, resolves it, parses the transcript, renders the handoff, writes it under the configured handoff dir, prints the final path, and then launches the target agent. With `--no-launch`, skip the launch step and exit 0. Refusing to handoff when source agent == target agent (clear error).
 - Launch failure (missing executable, spawn failure, or non-zero target exit) prints the handoff path, prints a clear error, and exits non-zero. The written file is left in place.
-- `claudex settings show` prints the parsed TOML config plus the resolved effective values for handoff dir and per-agent roots. `path` prints the config file path. `edit` opens `$EDITOR` on the config file (creating it if missing). `get <key>`, `set <key> <value>`, `add-root`, `remove-root`, and `reset-root` each operate on the TOML config through a load-modify-write round-trip and print the new effective config diff (or just "ok").
+- `baton settings show` prints the parsed TOML config plus the resolved effective values for handoff dir and per-agent roots. `path` prints the config file path. `edit` opens `$EDITOR` on the config file (creating it if missing). `get <key>`, `set <key> <value>`, `add-root`, `remove-root`, and `reset-root` each operate on the TOML config through a load-modify-write round-trip and print the new effective config diff (or just "ok").
 - Integration tests cover the golden paths against fixture transcript roots.
 
 ## Phases
@@ -164,7 +164,7 @@ Wire everything together. Implement command bodies for `list`, `inspect`, `hando
 
 ### E.6 — `settings` command
 
-- **Goal:** Boring, scriptable mutations to `~/.config/claudex/config.toml`.
+- **Goal:** Boring, scriptable mutations to `~/.config/baton/config.toml`.
 - **Files & changes:** `src/settings.rs` + dispatch in `cli.rs`.
 - **Implementation:**
   - `path` → print `config::default_path()`.
@@ -182,16 +182,16 @@ Wire everything together. Implement command bodies for `list`, `inspect`, `hando
 ### E.7 — Integration tests
 
 - **Goal:** Drive the binary end to end with fixture roots.
-- **Files & changes:** `tests/cli_integration.rs`, `tests/settings.rs`, `tests/launcher.rs`. Use `assert_cmd` (add as a dev-dep) or invoke `claudex::cli::run_with(args, env)` if we expose a test entry. Recommend `assert_cmd` for clarity.
+- **Files & changes:** `tests/cli_integration.rs`, `tests/settings.rs`, `tests/launcher.rs`. Use `assert_cmd` (add as a dev-dep) or invoke `baton::cli::run_with(args, env)` if we expose a test entry. Recommend `assert_cmd` for clarity.
   - Add `assert_cmd = "2"` and `predicates = "3"` to `dev-dependencies`.
 - **Cases:**
-  1. `list_claude_lists_fixtures` — arranges `XDG_CONFIG_HOME` to point at a temp config that names the fixture root. Runs `claudex list claude` and asserts the fixture session ids appear, newest first.
-  2. `list_last` — `claudex list claude --last` prints exactly one row, the newest.
-  3. `inspect_preview` — `claudex inspect claude:fixture-1` prints metadata + preview; not the full body.
+  1. `list_claude_lists_fixtures` — arranges `XDG_CONFIG_HOME` to point at a temp config that names the fixture root. Runs `baton list claude` and asserts the fixture session ids appear, newest first.
+  2. `list_last` — `baton list claude --last` prints exactly one row, the newest.
+  3. `inspect_preview` — `baton inspect claude:fixture-1` prints metadata + preview; not the full body.
   4. `inspect_full` — same but `--full` includes a known later line.
-  5. `handoff_no_launch_writes_file` — `claudex handoff claude:fixture-1 codex --no-launch` writes a file matching the naming pattern under the configured handoff dir; the file content starts with `source: claude\ntarget: codex\n`.
-  6. `handoff_same_agent_rejected` — `claudex handoff claude:fixture-1 claude` exits non-zero with a clear message.
-  7. `settings_roundtrip` — `claudex settings set handoff_dir /tmp/handoffs`, `settings get handoff_dir`, `settings add-root claude /tmp/foo`, then `settings show` lists `/tmp/foo`; `reset-root claude` removes it.
+  5. `handoff_no_launch_writes_file` — `baton handoff claude:fixture-1 codex --no-launch` writes a file matching the naming pattern under the configured handoff dir; the file content starts with `source: claude\ntarget: codex\n`.
+  6. `handoff_same_agent_rejected` — `baton handoff claude:fixture-1 claude` exits non-zero with a clear message.
+  7. `settings_roundtrip` — `baton settings set handoff_dir /tmp/handoffs`, `settings get handoff_dir`, `settings add-root claude /tmp/foo`, then `settings show` lists `/tmp/foo`; `reset-root claude` removes it.
   8. `launcher_missing_exec` — call `ProcessLauncher.launch(Agent::Claude, "...")` with `PATH=` set to an empty temp dir; assert `LaunchError::ExecutableNotFound`.
   9. `launcher_nonzero_exit` — point `ProcessLauncher` at a test executable or shim that exits non-zero; assert `LaunchError::NonZeroExit`.
 - **Config injection:** Do not add a public `--config` flag for v1. Tests should isolate configuration through `XDG_CONFIG_HOME` and normal TOML files.
