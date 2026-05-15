@@ -2,6 +2,13 @@
 name = "claudex"
 version = "0.1.0"
 edition = "2021"
+description = "A local CLI for handing active work between Claude Code and Codex."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/newtoallofthis123/claudex"
+homepage = "https://github.com/newtoallofthis123/claudex"
+keywords = ["cli", "codex", "claude", "handoff", "agents"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

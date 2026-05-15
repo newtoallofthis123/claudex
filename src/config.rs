@@ -79,6 +79,9 @@ fn expand_tilde(p: impl AsRef<Path>) -> PathBuf {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn missing_config_file_yields_defaults() {
@@ -92,41 +95,39 @@ mod tests {
 
     #[test]
     fn configured_roots_win_over_env() {
-        // SAFETY: tests in this module touch process env vars; cargo test may
-        // run them in parallel but each test uses a distinct var.
+        let _guard = ENV_LOCK.lock().unwrap();
+        let old = std::env::var_os("CLAUDE_CONFIG_DIR");
         unsafe {
             std::env::set_var("CLAUDE_CONFIG_DIR", "/from/env");
         }
         let configured = vec![PathBuf::from("/from/config")];
         let roots = effective_claude_roots(&configured);
         assert_eq!(roots, vec![PathBuf::from("/from/config")]);
-        unsafe {
-            std::env::remove_var("CLAUDE_CONFIG_DIR");
-        }
+        restore_env("CLAUDE_CONFIG_DIR", old);
     }
 
     #[test]
     fn env_wins_over_home_fallback_claude() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let old = std::env::var_os("CLAUDE_CONFIG_DIR");
         unsafe {
             std::env::set_var("CLAUDE_CONFIG_DIR", "/from/env/claude");
         }
         let roots = effective_claude_roots(&[]);
         assert_eq!(roots, vec![PathBuf::from("/from/env/claude/projects")]);
-        unsafe {
-            std::env::remove_var("CLAUDE_CONFIG_DIR");
-        }
+        restore_env("CLAUDE_CONFIG_DIR", old);
     }
 
     #[test]
     fn env_wins_over_home_fallback_codex() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let old = std::env::var_os("CODEX_HOME");
         unsafe {
             std::env::set_var("CODEX_HOME", "/from/env/codex");
         }
         let roots = effective_codex_roots(&[]);
         assert_eq!(roots, vec![PathBuf::from("/from/env/codex/sessions")]);
-        unsafe {
-            std::env::remove_var("CODEX_HOME");
-        }
+        restore_env("CODEX_HOME", old);
     }
 
     #[test]
@@ -151,5 +152,14 @@ mod tests {
         assert_eq!(cfg.handoff_dir, Some(PathBuf::from("/tmp/handoffs")));
         assert_eq!(cfg.roots.claude, vec![PathBuf::from("/a")]);
         assert_eq!(cfg.roots.codex, vec![PathBuf::from("/b")]);
+    }
+
+    fn restore_env(key: &str, old: Option<std::ffi::OsString>) {
+        unsafe {
+            match old {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
     }
 }
