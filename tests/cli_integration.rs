@@ -54,7 +54,7 @@ fn fake_fzf_that_cancels(dir: &Path) -> PathBuf {
 fn list_claude_lists_fixtures() {
     let (tmp, _) = fixture_env();
     let out = claudex(tmp.path())
-        .args(["list", "claude"])
+        .args(["list", "claude", "--all-sessions"])
         .assert()
         .success();
     let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
@@ -81,7 +81,7 @@ fn list_claude_lists_fixtures() {
 fn list_last_prints_one_row() {
     let (tmp, _) = fixture_env();
     let out = claudex(tmp.path())
-        .args(["list", "claude", "--last"])
+        .args(["list", "claude", "--last", "--all-sessions"])
         .assert()
         .success();
     let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
@@ -98,7 +98,7 @@ fn list_last_prints_one_row() {
 fn list_verbose_appends_path() {
     let (tmp, _) = fixture_env();
     let out = claudex(tmp.path())
-        .args(["list", "claude", "--last", "--verbose"])
+        .args(["list", "claude", "--last", "--verbose", "--all-sessions"])
         .assert()
         .success();
     let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
@@ -158,7 +158,7 @@ fn inspect_cancelled_interactive_error_is_concise_with_backtrace_enabled() {
     );
 
     let assert = claudex(tmp.path())
-        .args(["inspect"])
+        .args(["inspect", "--all-sessions"])
         .env("PATH", path)
         .env("RUST_BACKTRACE", "1")
         .assert()

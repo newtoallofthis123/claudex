@@ -10,7 +10,7 @@ use crate::launch::{self, Launcher, ProcessLauncher};
 use crate::model::{Agent, Block, Conversation, SessionSummary};
 use crate::providers;
 use crate::render;
-use crate::select::{self, FzfSelector, Selection};
+use crate::select::{self, FzfSelector};
 use crate::session_ref::SessionRef;
 use crate::settings;
 
@@ -31,9 +31,18 @@ pub enum Command {
         interactive: bool,
         #[arg(short, long)]
         verbose: bool,
+        /// Only list sessions whose recorded cwd equals this path. Defaults to
+        /// the current working directory.
+        #[arg(long, value_name = "PATH", conflicts_with = "all_sessions")]
+        pwd: Option<std::path::PathBuf>,
+        /// List sessions from every cwd (disables the default cwd filter).
+        #[arg(long)]
+        all_sessions: bool,
     },
     Inspect {
-        /// session reference like `claude:<id>` — omit when using --last or --interactive
+        /// Either a session reference like `claude:<id>`, or a bare agent name
+        /// (`claude` / `codex`) to open the picker for that agent. Omit when
+        /// using --last or --interactive.
         session: Option<String>,
         #[arg(long, value_name = "AGENT")]
         last: Option<String>,
@@ -41,6 +50,14 @@ pub enum Command {
         interactive: Option<String>,
         #[arg(long)]
         full: bool,
+        /// Only consider sessions whose recorded cwd equals this path.
+        /// Defaults to the current working directory. Ignored when an
+        /// explicit `agent:id` session reference is provided.
+        #[arg(long, value_name = "PATH", conflicts_with = "all_sessions")]
+        pwd: Option<std::path::PathBuf>,
+        /// Consider sessions from every cwd (disables the default cwd filter).
+        #[arg(long)]
+        all_sessions: bool,
     },
     Handoff {
         /// either `<source-ref>` (e.g. `claude:abc`) followed by `<target>`,
@@ -53,6 +70,15 @@ pub enum Command {
         interactive: Option<String>,
         #[arg(long)]
         no_launch: bool,
+        /// Only consider source sessions whose recorded cwd equals this
+        /// path. Defaults to the current working directory. Ignored when
+        /// an explicit `agent:id` source reference is provided.
+        #[arg(long, value_name = "PATH", conflicts_with = "all_sessions")]
+        pwd: Option<std::path::PathBuf>,
+        /// Consider source sessions from every cwd (disables the default
+        /// cwd filter).
+        #[arg(long)]
+        all_sessions: bool,
     },
     Settings {
         #[command(subcommand)]
@@ -122,19 +148,25 @@ pub fn run_to_exit_code() -> anyhow::Result<i32> {
             last,
             interactive,
             verbose,
-        } => cmd_list(&agent, last, interactive, verbose).map(|_| 0),
+            pwd,
+            all_sessions,
+        } => cmd_list(&agent, last, interactive, verbose, pwd, all_sessions).map(|_| 0),
         Command::Inspect {
             session,
             last,
             interactive,
             full,
-        } => cmd_inspect(session, last, interactive, full).map(|_| 0),
+            pwd,
+            all_sessions,
+        } => cmd_inspect(session, last, interactive, full, pwd, all_sessions).map(|_| 0),
         Command::Handoff {
             first,
             second,
             last,
             interactive,
             no_launch,
+            pwd,
+            all_sessions,
         } => {
             // When `--last` or `--interactive` is used, the only positional is
             // the target agent. Otherwise we expect `<source-ref> <target>`.
@@ -142,7 +174,15 @@ pub fn run_to_exit_code() -> anyhow::Result<i32> {
                 Some(t) => (Some(first), t),
                 None => (None, first),
             };
-            cmd_handoff(source, &target, last, interactive, no_launch)
+            cmd_handoff(
+                source,
+                &target,
+                last,
+                interactive,
+                no_launch,
+                pwd,
+                all_sessions,
+            )
         }
         Command::Settings { action } => cmd_settings(action).map(|_| 0),
     }
@@ -153,7 +193,43 @@ fn parse_agent(s: &str) -> anyhow::Result<Agent> {
         .ok_or_else(|| anyhow::anyhow!("unknown agent `{s}` (expected `claude` or `codex`)"))
 }
 
-fn cmd_list(agent_str: &str, last: bool, interactive: bool, verbose: bool) -> anyhow::Result<()> {
+fn resolve_scope(
+    pwd: Option<std::path::PathBuf>,
+    all_sessions: bool,
+) -> anyhow::Result<Option<select::Scope>> {
+    if all_sessions {
+        return Ok(None);
+    }
+    let raw = match pwd {
+        Some(p) => p,
+        None => std::env::current_dir().context("could not determine current directory")?,
+    };
+    Ok(Some(select::Scope::new(raw)))
+}
+
+fn load_scoped_sessions(
+    agent: Agent,
+    scope: Option<&select::Scope>,
+    cfg: &Config,
+) -> anyhow::Result<Vec<SessionSummary>> {
+    let provider = providers::for_agent(agent, cfg);
+    let mut sessions = provider
+        .list_sessions()
+        .with_context(|| format!("could not list {} sessions", agent.as_str()))?;
+    if let Some(s) = scope {
+        s.retain(&mut sessions);
+    }
+    Ok(sessions)
+}
+
+fn cmd_list(
+    agent_str: &str,
+    last: bool,
+    interactive: bool,
+    verbose: bool,
+    pwd: Option<std::path::PathBuf>,
+    all_sessions: bool,
+) -> anyhow::Result<()> {
     if last && interactive {
         return Err(anyhow::anyhow!(
             "`--last` and `--interactive` are mutually exclusive"
@@ -161,20 +237,23 @@ fn cmd_list(agent_str: &str, last: bool, interactive: bool, verbose: bool) -> an
     }
     let agent = parse_agent(agent_str)?;
     let cfg = settings::load_default().context("could not load settings")?;
-    let provider = providers::for_agent(agent, &cfg);
-    let sessions = provider
-        .list_sessions()
-        .with_context(|| format!("could not list {} sessions", agent.as_str()))?;
+    let scope = resolve_scope(pwd, all_sessions)?;
+    let sessions = load_scoped_sessions(agent, scope.as_ref(), &cfg)?;
 
-    if interactive {
-        if sessions.is_empty() {
+    if sessions.is_empty() {
+        if let Some(s) = scope.as_ref() {
+            s.hint();
+        }
+        if interactive {
             return Err(anyhow::anyhow!("no sessions available"));
         }
-        let rows: Vec<String> = sessions.iter().map(select::format_row).collect();
-        let selector = FzfSelector;
-        let idx = <FzfSelector as select::Selector>::pick(&selector, &rows)?
-            .ok_or_else(|| anyhow::anyhow!("no selection made"))?;
-        let chosen = &sessions[idx];
+        return Ok(());
+    }
+
+    let now = OffsetDateTime::now_utc();
+
+    if interactive {
+        let chosen = select::pick_interactive(sessions, &FzfSelector, now)?;
         println!("{}:{}", agent.as_str(), chosen.id);
         return Ok(());
     }
@@ -183,18 +262,23 @@ fn cmd_list(agent_str: &str, last: bool, interactive: bool, verbose: bool) -> an
     let mut out = stdout.lock();
     if last {
         if let Some(s) = sessions.first() {
-            writeln!(out, "{}", format_list_row(s, verbose))?;
+            writeln!(out, "{}", format_list_row(s, all_sessions, verbose, now))?;
         }
         return Ok(());
     }
     for s in &sessions {
-        writeln!(out, "{}", format_list_row(s, verbose))?;
+        writeln!(out, "{}", format_list_row(s, all_sessions, verbose, now))?;
     }
     Ok(())
 }
 
-fn format_list_row(s: &SessionSummary, verbose: bool) -> String {
-    let base = select::format_row(s);
+fn format_list_row(
+    s: &SessionSummary,
+    show_dir: bool,
+    verbose: bool,
+    now: OffsetDateTime,
+) -> String {
+    let base = select::format_list_row(s, show_dir, now);
     if verbose {
         format!("{}\t{}", base, s.path.display())
     } else {
@@ -207,12 +291,16 @@ fn cmd_inspect(
     last: Option<String>,
     interactive: Option<String>,
     full: bool,
+    pwd: Option<std::path::PathBuf>,
+    all_sessions: bool,
 ) -> anyhow::Result<()> {
     let cfg = settings::load_default().context("could not load settings")?;
+    let scope = resolve_scope(pwd, all_sessions)?;
     let (agent, summary) = resolve_selection(
         session.as_deref(),
         last.as_deref(),
         interactive.as_deref(),
+        scope.as_ref(),
         &cfg,
     )?;
     let provider = providers::for_agent(agent, &cfg);
@@ -304,6 +392,7 @@ fn resolve_selection(
     explicit: Option<&str>,
     last_agent: Option<&str>,
     interactive_agent: Option<&str>,
+    scope: Option<&select::Scope>,
     cfg: &Config,
 ) -> anyhow::Result<(Agent, SessionSummary)> {
     let modes = [
@@ -319,12 +408,21 @@ fn resolve_selection(
             "specify at most one of <session-ref>, --last <agent>, or --interactive <agent>"
         ));
     }
+
+    // A bare agent name like `claude` looks like a positional session ref
+    // to clap but should mean "open the picker for that agent".
+    let bare_agent = explicit.filter(|s| !s.contains(':')).and_then(Agent::parse);
+    let (explicit, interactive_agent) = match bare_agent {
+        Some(_) => (None, explicit),
+        None => (explicit, interactive_agent),
+    };
     let interactive_agent = if modes == 0 {
         Some("claude")
     } else {
         interactive_agent
     };
 
+    // Explicit `agent:id` honors the user's choice — scope filter doesn't apply.
     if let Some(s) = explicit {
         let r = SessionRef::parse(s)?;
         let provider = providers::for_agent(r.agent, cfg);
@@ -337,17 +435,22 @@ fn resolve_selection(
             .ok_or_else(|| anyhow::anyhow!("session id `{}` not found", r.id))?;
         return Ok((r.agent, summary));
     }
-    if let Some(a) = last_agent {
-        let agent = parse_agent(a)?;
-        let provider = providers::for_agent(agent, cfg);
-        let s = select::resolve(provider.as_ref(), Selection::Last, &FzfSelector)?;
-        return Ok((agent, s));
+
+    let pick_first = last_agent.is_some();
+    let agent = parse_agent(last_agent.or(interactive_agent).unwrap())?;
+    let sessions = load_scoped_sessions(agent, scope, cfg)?;
+    if sessions.is_empty() {
+        if let Some(s) = scope {
+            s.hint();
+        }
+        return Err(anyhow::anyhow!("no sessions available"));
     }
-    let a = interactive_agent.unwrap();
-    let agent = parse_agent(a)?;
-    let provider = providers::for_agent(agent, cfg);
-    let s = select::resolve(provider.as_ref(), Selection::Interactive, &FzfSelector)?;
-    Ok((agent, s))
+    let summary = if pick_first {
+        sessions.into_iter().next().unwrap()
+    } else {
+        select::pick_interactive(sessions, &FzfSelector, OffsetDateTime::now_utc())?
+    };
+    Ok((agent, summary))
 }
 
 fn cmd_handoff(
@@ -356,13 +459,17 @@ fn cmd_handoff(
     last: Option<String>,
     interactive: Option<String>,
     no_launch: bool,
+    pwd: Option<std::path::PathBuf>,
+    all_sessions: bool,
 ) -> anyhow::Result<i32> {
     let target = parse_agent(target_str)?;
     let cfg = settings::load_default().context("could not load settings")?;
+    let scope = resolve_scope(pwd, all_sessions)?;
     let (source_agent, summary) = resolve_selection(
         source.as_deref(),
         last.as_deref(),
         interactive.as_deref(),
+        scope.as_ref(),
         &cfg,
     )?;
 

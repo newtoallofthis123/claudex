@@ -1,9 +1,10 @@
 use std::io::Write as _;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
+use time::OffsetDateTime;
 
 use crate::model::SessionSummary;
-use crate::providers::Provider;
 
 pub trait Selector {
     fn pick(&self, rows: &[String]) -> anyhow::Result<Option<usize>>;
@@ -62,53 +63,154 @@ impl Selector for FzfSelector {
     }
 }
 
-pub enum Selection {
-    Explicit(String),
-    Last,
-    Interactive,
+/// A cwd-equality filter for session listings. Carries both the raw
+/// path (for display in error hints) and a canonicalized form (for
+/// matching), since user-supplied paths may differ from a session's
+/// recorded cwd by trailing slashes, `..`, or symlinks.
+pub struct Scope {
+    raw: PathBuf,
+    canon: PathBuf,
 }
 
-pub fn format_row(s: &SessionSummary) -> String {
-    let started = s
-        .started_at
-        .as_ref()
-        .and_then(|t| {
-            t.format(&time::format_description::well_known::Rfc3339)
-                .ok()
-        })
-        .unwrap_or_else(|| "-".to_string());
-    let cwd = s
-        .cwd
+impl Scope {
+    pub fn new(raw: PathBuf) -> Self {
+        let canon = std::fs::canonicalize(&raw).unwrap_or_else(|_| raw.clone());
+        Self { raw, canon }
+    }
+
+    pub fn retain(&self, sessions: &mut Vec<SessionSummary>) {
+        sessions.retain(|s| match s.cwd.as_ref() {
+            Some(c) => self.matches(c),
+            None => false,
+        });
+    }
+
+    fn matches(&self, cwd: &Path) -> bool {
+        // Fast path: exact equality avoids a syscall on the common case
+        // where the session's recorded cwd is already canonical.
+        if cwd == self.canon || cwd == self.raw {
+            return true;
+        }
+        std::fs::canonicalize(cwd)
+            .map(|c| c == self.canon)
+            .unwrap_or(false)
+    }
+
+    pub fn hint(&self) {
+        eprintln!(
+            "no sessions for {}; try --all-sessions or --pwd <path>",
+            self.raw.display()
+        );
+    }
+}
+
+/// Drive the picker against a pre-filtered list. Caller is responsible
+/// for non-empty sessions.
+pub fn pick_interactive(
+    sessions: Vec<SessionSummary>,
+    selector: &dyn Selector,
+    now: OffsetDateTime,
+) -> anyhow::Result<SessionSummary> {
+    let rows: Vec<String> = sessions.iter().map(|s| format_picker_row(s, now)).collect();
+    let idx = selector
+        .pick(&rows)?
+        .ok_or_else(|| anyhow::anyhow!("no selection made"))?;
+    Ok(sessions.into_iter().nth(idx).unwrap())
+}
+
+fn field_time(s: &SessionSummary, now: OffsetDateTime) -> String {
+    match s.started_at.as_ref() {
+        Some(t) => humanize_time(*t, now),
+        None => "-".to_string(),
+    }
+}
+
+fn humanize_time(then: OffsetDateTime, now: OffsetDateTime) -> String {
+    let delta = now - then;
+    let secs = delta.whole_seconds();
+    if secs < 0 {
+        // Future timestamp can happen with clock skew — show a date
+        // rather than "-Nm ago".
+        return format_date(then);
+    }
+    if secs < 60 {
+        return "just now".to_string();
+    }
+    let mins = delta.whole_minutes();
+    if mins < 60 {
+        return format!("{mins}m ago");
+    }
+    let hours = delta.whole_hours();
+    if hours < 24 {
+        return format!("{hours}h ago");
+    }
+    let days = delta.whole_days();
+    if days < 7 {
+        return format!("{days}d ago");
+    }
+    format_date(then)
+}
+
+fn format_date(t: OffsetDateTime) -> String {
+    let fmt = time::macros::format_description!("[year]-[month]-[day]");
+    t.format(&fmt).unwrap_or_else(|_| "-".to_string())
+}
+
+fn field_cwd(s: &SessionSummary) -> String {
+    s.cwd
         .as_ref()
         .map(|p| p.display().to_string())
-        .unwrap_or_else(|| "-".to_string());
-    let title = s.title.clone().unwrap_or_else(|| "-".to_string());
-    format!("{}\t{}\t{}\t{}", s.id, started, cwd, title)
+        .unwrap_or_else(|| "-".to_string())
 }
 
-pub fn resolve(
-    provider: &dyn Provider,
-    selection: Selection,
-    selector: &dyn Selector,
-) -> anyhow::Result<SessionSummary> {
-    let sessions = provider
-        .list_sessions()
-        .with_context(|| format!("could not list {} sessions", provider.agent().as_str()))?;
-    match selection {
-        Selection::Explicit(id) => sessions
-            .into_iter()
-            .find(|s| s.id == id)
-            .ok_or_else(|| anyhow::anyhow!("session id `{id}` not found")),
-        Selection::Last => sessions
-            .into_iter()
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("no sessions available")),
-        Selection::Interactive => {
-            let rows: Vec<String> = sessions.iter().map(format_row).collect();
-            let idx = selector
-                .pick(&rows)?
-                .ok_or_else(|| anyhow::anyhow!("no selection made"))?;
-            Ok(sessions.into_iter().nth(idx).unwrap())
-        }
+fn field_command(s: &SessionSummary) -> String {
+    // Newlines are scrubbed here (not in csv_escape) because the
+    // list-row format is tab-separated and has no way to quote them.
+    match s.title.as_deref() {
+        Some(t) => t
+            .chars()
+            .map(|c| if c == '\n' || c == '\r' { ' ' } else { c })
+            .collect(),
+        None => "-".to_string(),
+    }
+}
+
+/// Tab-separated row for `claudex list`. Columns: id, command, time,
+/// and dir when `show_dir` is true (i.e. `--all-sessions`).
+pub fn format_list_row(s: &SessionSummary, show_dir: bool, now: OffsetDateTime) -> String {
+    let base = format!("{}\t{}\t{}", s.id, field_command(s), field_time(s, now));
+    if show_dir {
+        format!("{}\t{}", base, field_cwd(s))
+    } else {
+        base
+    }
+}
+
+/// CSV row for the interactive picker (fzf). Columns: id, command,
+/// time, dir. CSV (not TSV) because session titles may already contain
+/// tabs from copy-pasted shell output.
+pub fn format_picker_row(s: &SessionSummary, now: OffsetDateTime) -> String {
+    let fields = [
+        s.id.clone(),
+        field_command(s),
+        field_time(s, now),
+        field_cwd(s),
+    ];
+    fields
+        .iter()
+        .map(|f| csv_escape(f))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn csv_escape(field: &str) -> String {
+    // `field_command` already scrubs newlines, and the other fields
+    // (id, formatted time, cwd) cannot contain them, so we only need
+    // to quote for commas and embedded quotes.
+    if field.contains(',') || field.contains('"') {
+        let escaped = field.replace('"', "\"\"");
+        format!("\"{escaped}\"")
+    } else {
+        field.to_string()
     }
 }
