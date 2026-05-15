@@ -1,5 +1,5 @@
 [package]
-name = "baton"
+name = "batonrs"
 version = "0.1.0"
 edition = "2021"
 description = "A local CLI for handing active work between Claude Code and Codex."
@@ -31,4 +31,5 @@ name = "baton"
 path = "src/main.rs"
 
 [lib]
+name = "baton"
 path = "src/lib.rs"

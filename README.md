@@ -65,6 +65,14 @@ The handoff includes source metadata, working directory, transcript path, human 
 - Codex CLI installed as `codex`, if you want to launch Codex from `baton`
 - `fzf`, optional, for interactive session picking
 
+### Install From crates.io
+
+The crate is published as `batonrs` but it still installs the `baton` binary:
+
+```bash
+cargo install batonrs --locked
+```
+
 ### Install From Source
 
 ```bash
