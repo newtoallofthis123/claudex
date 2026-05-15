@@ -1,4 +1,4 @@
-# baton
+# 🗽 baton
 
 [![CI](https://github.com/newtoallofthis123/baton/actions/workflows/ci.yml/badge.svg)](https://github.com/newtoallofthis123/baton/actions/workflows/ci.yml)
 
