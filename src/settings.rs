@@ -1,6 +1,8 @@
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
+use anyhow::Context as _;
+
 use crate::config::{self, Config};
 use crate::model::Agent;
 
@@ -28,16 +30,25 @@ pub fn load_default() -> anyhow::Result<Config> {
 /// Atomically write `cfg` as TOML to `path` (write to `<path>.tmp` + rename).
 pub fn write(path: &Path, cfg: &Config) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("could not create config directory `{}`", parent.display()))?;
     }
-    let text = toml::to_string_pretty(cfg)?;
+    let text = toml::to_string_pretty(cfg).context("could not serialize settings as TOML")?;
     let tmp = path.with_extension("toml.tmp");
     {
-        let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(text.as_bytes())?;
+        let mut f = std::fs::File::create(&tmp)
+            .with_context(|| format!("could not create `{}`", tmp.display()))?;
+        f.write_all(text.as_bytes())
+            .with_context(|| format!("could not write `{}`", tmp.display()))?;
         f.sync_all().ok();
     }
-    std::fs::rename(&tmp, path)?;
+    std::fs::rename(&tmp, path).with_context(|| {
+        format!(
+            "could not move `{}` into `{}`",
+            tmp.display(),
+            path.display()
+        )
+    })?;
     Ok(())
 }
 

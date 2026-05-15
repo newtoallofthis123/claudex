@@ -1,5 +1,7 @@
 use std::io::Write as _;
 
+use anyhow::Context as _;
+
 use crate::model::SessionSummary;
 use crate::providers::Provider;
 
@@ -25,7 +27,7 @@ impl Selector for FzfSelector {
                     "fzf not found on PATH — try `--last` or pass an explicit session id"
                 ));
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e).context("could not launch fzf"),
         };
 
         {
@@ -34,12 +36,18 @@ impl Selector for FzfSelector {
                 .as_mut()
                 .ok_or_else(|| anyhow::anyhow!("could not open fzf stdin"))?;
             for row in rows {
-                stdin.write_all(row.as_bytes())?;
-                stdin.write_all(b"\n")?;
+                stdin
+                    .write_all(row.as_bytes())
+                    .context("could not write session row to fzf")?;
+                stdin
+                    .write_all(b"\n")
+                    .context("could not write session row to fzf")?;
             }
         }
 
-        let output = child.wait_with_output()?;
+        let output = child
+            .wait_with_output()
+            .context("fzf did not exit cleanly")?;
         if !output.status.success() {
             // exit code 130 = user cancelled; treat as no selection.
             return Ok(None);
@@ -83,7 +91,9 @@ pub fn resolve(
     selection: Selection,
     selector: &dyn Selector,
 ) -> anyhow::Result<SessionSummary> {
-    let sessions = provider.list_sessions()?;
+    let sessions = provider
+        .list_sessions()
+        .with_context(|| format!("could not list {} sessions", provider.agent().as_str()))?;
     match selection {
         Selection::Explicit(id) => sessions
             .into_iter()

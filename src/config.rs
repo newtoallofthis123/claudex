@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+use anyhow::Context as _;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
@@ -31,8 +33,10 @@ pub fn load_from(path: &Path) -> anyhow::Result<Config> {
     if !path.exists() {
         return Ok(Config::default());
     }
-    let text = std::fs::read_to_string(path)?;
-    Ok(toml::from_str(&text)?)
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("could not read config `{}`", path.display()))?;
+    toml::from_str(&text)
+        .with_context(|| format!("could not parse config `{}` as TOML", path.display()))
 }
 
 pub fn effective_handoff_dir(cfg: &Config) -> PathBuf {

@@ -1,5 +1,6 @@
 use std::io::Write as _;
 
+use anyhow::Context as _;
 use clap::{Parser, Subcommand};
 use time::OffsetDateTime;
 
@@ -86,15 +87,34 @@ pub enum SettingsAction {
 
 const INSPECT_PREVIEW_LINES: usize = 80;
 
-pub fn run() -> anyhow::Result<()> {
-    let code = run_to_exit_code()?;
-    if code != 0 {
-        std::process::exit(code);
-    }
-    Ok(())
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub struct ExitError {
+    code: i32,
+    message: String,
 }
 
-fn run_to_exit_code() -> anyhow::Result<i32> {
+impl ExitError {
+    fn new(code: i32, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+
+    pub fn code(&self) -> i32 {
+        self.code
+    }
+}
+
+pub fn exit_code(error: &anyhow::Error) -> i32 {
+    error
+        .downcast_ref::<ExitError>()
+        .map(ExitError::code)
+        .unwrap_or(1)
+}
+
+pub fn run_to_exit_code() -> anyhow::Result<i32> {
     let cli = Cli::parse();
     match cli.command {
         Command::List {
@@ -140,9 +160,11 @@ fn cmd_list(agent_str: &str, last: bool, interactive: bool, verbose: bool) -> an
         ));
     }
     let agent = parse_agent(agent_str)?;
-    let cfg = settings::load_default()?;
+    let cfg = settings::load_default().context("could not load settings")?;
     let provider = providers::for_agent(agent, &cfg);
-    let sessions = provider.list_sessions()?;
+    let sessions = provider
+        .list_sessions()
+        .with_context(|| format!("could not list {} sessions", agent.as_str()))?;
 
     if interactive {
         if sessions.is_empty() {
@@ -186,7 +208,7 @@ fn cmd_inspect(
     interactive: Option<String>,
     full: bool,
 ) -> anyhow::Result<()> {
-    let cfg = settings::load_default()?;
+    let cfg = settings::load_default().context("could not load settings")?;
     let (agent, summary) = resolve_selection(
         session.as_deref(),
         last.as_deref(),
@@ -194,8 +216,20 @@ fn cmd_inspect(
         &cfg,
     )?;
     let provider = providers::for_agent(agent, &cfg);
-    let resolved = provider.resolve_session(&summary.id)?;
-    let conv = provider.parse_transcript(&resolved)?;
+    let resolved = provider.resolve_session(&summary.id).with_context(|| {
+        format!(
+            "could not resolve {} session `{}`",
+            agent.as_str(),
+            summary.id
+        )
+    })?;
+    let conv = provider.parse_transcript(&resolved).with_context(|| {
+        format!(
+            "could not parse {} transcript `{}`",
+            agent.as_str(),
+            resolved.path.display()
+        )
+    })?;
 
     print_inspect_header(&conv);
 
@@ -280,16 +314,23 @@ fn resolve_selection(
     .iter()
     .filter(|b| **b)
     .count();
-    if modes != 1 {
+    if modes > 1 {
         return Err(anyhow::anyhow!(
-            "specify exactly one of <session-ref>, --last <agent>, or --interactive <agent>"
+            "specify at most one of <session-ref>, --last <agent>, or --interactive <agent>"
         ));
     }
+    let interactive_agent = if modes == 0 {
+        Some("claude")
+    } else {
+        interactive_agent
+    };
 
     if let Some(s) = explicit {
         let r = SessionRef::parse(s)?;
         let provider = providers::for_agent(r.agent, cfg);
-        let sessions = provider.list_sessions()?;
+        let sessions = provider
+            .list_sessions()
+            .with_context(|| format!("could not list {} sessions", r.agent.as_str()))?;
         let summary = sessions
             .into_iter()
             .find(|x| x.id == r.id)
@@ -317,7 +358,7 @@ fn cmd_handoff(
     no_launch: bool,
 ) -> anyhow::Result<i32> {
     let target = parse_agent(target_str)?;
-    let cfg = settings::load_default()?;
+    let cfg = settings::load_default().context("could not load settings")?;
     let (source_agent, summary) = resolve_selection(
         source.as_deref(),
         last.as_deref(),
@@ -333,8 +374,20 @@ fn cmd_handoff(
     }
 
     let provider = providers::for_agent(source_agent, &cfg);
-    let resolved = provider.resolve_session(&summary.id)?;
-    let conv = provider.parse_transcript(&resolved)?;
+    let resolved = provider.resolve_session(&summary.id).with_context(|| {
+        format!(
+            "could not resolve {} session `{}`",
+            source_agent.as_str(),
+            summary.id
+        )
+    })?;
+    let conv = provider.parse_transcript(&resolved).with_context(|| {
+        format!(
+            "could not parse {} transcript `{}`",
+            source_agent.as_str(),
+            resolved.path.display()
+        )
+    })?;
 
     let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
     let rendered = render::render(&conv, target, now);
@@ -351,10 +404,7 @@ fn cmd_handoff(
     let launcher = ProcessLauncher;
     match launcher.launch(target, &prompt) {
         Ok(_) => Ok(0),
-        Err(e) => {
-            eprintln!("launch failed: {e}");
-            Ok(2)
-        }
+        Err(e) => Err(ExitError::new(2, format!("launch failed: {e}")).into()),
     }
 }
 
@@ -392,7 +442,10 @@ fn cmd_settings(action: SettingsAction) -> anyhow::Result<()> {
         SettingsAction::Edit => {
             settings::ensure_exists(&path)?;
             let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-            let status = std::process::Command::new(&editor).arg(&path).status()?;
+            let status = std::process::Command::new(&editor)
+                .arg(&path)
+                .status()
+                .with_context(|| format!("could not launch editor `{editor}`"))?;
             if !status.success() {
                 return Err(anyhow::anyhow!("editor `{editor}` exited with {status}"));
             }

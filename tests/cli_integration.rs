@@ -3,6 +3,9 @@ use std::path::{Path, PathBuf};
 use assert_cmd::Command;
 use tempfile::{tempdir, TempDir};
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 fn fixtures_claude() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/claude")
 }
@@ -35,6 +38,16 @@ fn claudex(home: &Path) -> Command {
     c.env_remove("CLAUDE_CONFIG_DIR");
     c.env_remove("CODEX_HOME");
     c
+}
+
+#[cfg(unix)]
+fn fake_fzf_that_cancels(dir: &Path) -> PathBuf {
+    let path = dir.join("fzf");
+    std::fs::write(&path, "#!/bin/sh\ncat >/dev/null\nexit 130\n").unwrap();
+    let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&path, permissions).unwrap();
+    path
 }
 
 #[test]
@@ -127,6 +140,42 @@ fn inspect_full_includes_body() {
     assert!(
         stdout.contains("hello, can you help me build something?"),
         "missing user text:\n{stdout}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn inspect_cancelled_interactive_error_is_concise_with_backtrace_enabled() {
+    let (tmp, _) = fixture_env();
+    let fake_bin = tempdir().unwrap();
+    fake_fzf_that_cancels(fake_bin.path());
+
+    let existing_path = std::env::var_os("PATH").unwrap_or_default();
+    let path = format!(
+        "{}:{}",
+        fake_bin.path().display(),
+        existing_path.to_string_lossy()
+    );
+
+    let assert = claudex(tmp.path())
+        .args(["inspect"])
+        .env("PATH", path)
+        .env("RUST_BACKTRACE", "1")
+        .assert()
+        .failure();
+    let stderr = String::from_utf8(assert.get_output().stderr.clone()).unwrap();
+
+    assert!(
+        stderr.contains("claudex: no selection made"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        !stderr.contains("Stack backtrace") && !stderr.contains("std::backtrace"),
+        "stderr included a backtrace:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("src/select.rs"),
+        "stderr included a source location:\n{stderr}"
     );
 }
 
