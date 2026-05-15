@@ -4,23 +4,20 @@ use claudex::launch::{catch_up_prompt, LaunchError, Launcher, ProcessLauncher};
 use claudex::model::Agent;
 use tempfile::tempdir;
 
+static PATH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn missing_exec_returns_not_found() {
+    let _guard = PATH_LOCK.lock().unwrap();
+
     // Point PATH at an empty temp dir so the agent executable cannot be found.
     let empty = tempdir().unwrap();
     let prev = std::env::var_os("PATH");
-    // SAFETY: this test mutates a process-wide env var; serialise by running
-    // single-threaded if needed (`cargo test -- --test-threads=1`).
     unsafe {
         std::env::set_var("PATH", empty.path());
     }
     let result = ProcessLauncher.launch(Agent::Claude, "anything");
-    unsafe {
-        match prev {
-            Some(v) => std::env::set_var("PATH", v),
-            None => std::env::remove_var("PATH"),
-        }
-    }
+    restore_path(prev);
     let err = result.expect_err("expected launch failure");
     assert!(
         matches!(err, LaunchError::ExecutableNotFound(_)),
@@ -30,6 +27,8 @@ fn missing_exec_returns_not_found() {
 
 #[test]
 fn nonzero_exit_is_reported() {
+    let _guard = PATH_LOCK.lock().unwrap();
+
     // Shim `claude` to `false` by giving PATH a dir with a `claude` script.
     let dir = tempdir().unwrap();
     let shim = dir.path().join("claude");
@@ -47,12 +46,7 @@ fn nonzero_exit_is_reported() {
         std::env::set_var("PATH", dir.path());
     }
     let result = ProcessLauncher.launch(Agent::Claude, "ignored");
-    unsafe {
-        match prev {
-            Some(v) => std::env::set_var("PATH", v),
-            None => std::env::remove_var("PATH"),
-        }
-    }
+    restore_path(prev);
     let err = result.expect_err("expected launch failure");
     match err {
         LaunchError::NonZeroExit { cmd, status } => {
@@ -69,4 +63,13 @@ fn catch_up_prompt_mentions_path() {
     let prompt = catch_up_prompt(&p);
     assert!(prompt.contains("/tmp/handoff.md"));
     assert!(prompt.contains("handoff"));
+}
+
+fn restore_path(prev: Option<std::ffi::OsString>) {
+    unsafe {
+        match prev {
+            Some(v) => std::env::set_var("PATH", v),
+            None => std::env::remove_var("PATH"),
+        }
+    }
 }
